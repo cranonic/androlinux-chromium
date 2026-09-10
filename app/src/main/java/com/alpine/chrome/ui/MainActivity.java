@@ -11,6 +11,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
@@ -63,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
         errorBannerText = findViewById(R.id.error_banner_text);
 
         setupWebView();
+        setupBackHandler();
         // Loading overlay with Chromium logo is visible until preview is ready
         loadingOverlay.setVisibility(View.VISIBLE);
     }
@@ -170,12 +172,18 @@ public class MainActivity extends AppCompatActivity {
         super.onStop();
     }
 
-    @Override
-    public void onBackPressed() {
-        if (preview != null && preview.canGoBack()) {
-            preview.goBack();
-        } else {
-            super.onBackPressed();
-        }
+    private void setupBackHandler() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (preview != null && preview.canGoBack()) {
+                    preview.goBack();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
     }
 }
+

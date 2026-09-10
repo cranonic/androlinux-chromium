@@ -21,7 +21,6 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # AGP 8.9.1 requires Gradle 8.11.1+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -53,14 +52,25 @@ jobs:
 
       - name: Build Release APK
         env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
-            export STORE_FILE="$GITHUB_WORKSPACE/app/release.keystore"
-            ./gradlew :app:assembleRelease --stacktrace
+          set -e
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            # Decode safely; fall back to unsigned if secret is malformed
+            if printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/release.keystore 2>/dev/null \
+               && [ -s app/release.keystore ]; then
+              export STORE_FILE="$GITHUB_WORKSPACE/app/release.keystore"
+              echo "Signing with provided keystore"
+              ./gradlew :app:assembleRelease --stacktrace
+            else
+              echo "KEYSTORE_BASE64 present but invalid — building unsigned release"
+              rm -f app/release.keystore
+              unset STORE_FILE
+              ./gradlew :app:assembleRelease --stacktrace
+            fi
           else
             echo "No KEYSTORE_BASE64 secret — building unsigned release"
             ./gradlew :app:assembleRelease --stacktrace
