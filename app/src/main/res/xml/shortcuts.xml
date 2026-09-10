@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press app icon → only Settings shortcut (as requested) -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_chromium_logo"
+        android:shortcutShortLabel="@string/shortcut_settings_short"
+        android:shortcutLongLabel="@string/shortcut_settings_long">
+        <intent
+            android:action="com.alpine.chrome.OPEN_SETTINGS"
+            android:targetPackage="com.alpine.chrome"
+            android:targetClass="com.alpine.chrome.ui.MainActivity" />
+    </shortcut>
+</shortcuts>

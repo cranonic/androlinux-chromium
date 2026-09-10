@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/md_bg"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/md_surface"
+        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:title="@string/settings_title"
+        app:titleTextColor="@color/md_on_surface" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="8dp"
+                android:text="@string/settings_display_size"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:textColor="@color/md_on_surface_variant" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/slider_display_scale"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:valueFrom="0.75"
+                android:valueTo="1.5"
+                android:value="1.0"
+                android:stepSize="0.05"
+                app:haloColor="@color/md_primary_container"
+                app:thumbColor="@color/md_primary"
+                app:trackColorActive="@color/md_primary"
+                app:trackColorInactive="@color/md_outline" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_touch_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:checked="true"
+                android:text="@string/settings_touch_mode"
+                android:textColor="@color/md_on_surface" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_mouse_support"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_mouse_support"
+                android:textColor="@color/md_on_surface" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginVertical="20dp"
+                android:background="@color/md_outline" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset_env"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_reset_env"
+                app:strokeColor="@color/md_error" />
+
+            <TextView
+                android:id="@+id/about_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="@color/md_on_surface_variant" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

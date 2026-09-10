@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simplified Chromium-style circular logo (vector) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer ring segments approximating Chromium colors -->
+    <path
+        android:fillColor="#4285F4"
+        android:pathData="M54,10 A44,44 0 0,1 92.1,70 L70,70 A22,22 0 0,0 54,32 Z" />
+    <path
+        android:fillColor="#EA4335"
+        android:pathData="M92.1,70 A44,44 0 0,1 15.9,70 L32.5,54 A22,22 0 0,0 70,70 Z" />
+    <path
+        android:fillColor="#FBBC05"
+        android:pathData="M15.9,70 A44,44 0 0,1 54,10 L54,32 A22,22 0 0,0 32.5,54 Z" />
+    <!-- Center disc -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,40 A14,14 0 1,1 53.9,40 Z" />
+    <path
+        android:fillColor="#4285F4"
+        android:pathData="M54,46 A8,8 0 1,1 53.9,46 Z" />
+</vector>

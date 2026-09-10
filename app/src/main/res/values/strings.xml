@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alpine Chrome</string>
+    <string name="title_activity_main">Alpine Chrome</string>
+
+    <!-- Splash / loading -->
+    <string name="splash_loading">Starting…</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Welcome to Alpine Chrome</string>
+    <string name="onboarding_welcome_body">Run a lightweight Linux Chromium browser on your phone. Minimal packages, smooth touch, and a clean Android experience.</string>
+    <string name="onboarding_perm_title">Permissions</string>
+    <string name="onboarding_perm_body">Storage is used for the Alpine environment. Notifications keep the short-lived session indicator visible only while you browse.</string>
+    <string name="onboarding_storage_label">Storage access</string>
+    <string name="onboarding_storage_desc">Needed to install and run the Alpine rootfs</string>
+    <string name="onboarding_notif_label">Notifications</string>
+    <string name="onboarding_notif_desc">Shown only while Chromium is running (not all day)</string>
+    <string name="onboarding_details_title">Almost ready</string>
+    <string name="onboarding_details_body">Next we install a minimal Alpine Linux environment and Chromium. Only required packages are downloaded — no bloat. You can start browsing as soon as setup finishes.</string>
+    <string name="btn_next">Next</string>
+    <string name="btn_allow">Allow</string>
+    <string name="btn_skip">Skip for now</string>
+    <string name="btn_get_started">Get started</string>
+
+    <!-- Setup / install -->
+    <string name="setup_title">Setting up Chromium</string>
+    <string name="setup_subtitle">Lightweight Alpine install in progress</string>
+    <string name="setup_status_downloading">Downloading Alpine rootfs…</string>
+    <string name="setup_status_extracting">Extracting environment…</string>
+    <string name="setup_status_packages">Installing Chromium (minimal)…</string>
+    <string name="setup_status_ready">Ready — launching preview</string>
+    <string name="setup_error_title">Setup failed</string>
+    <string name="setup_retry">Retry</string>
+
+    <!-- Main browser -->
+    <string name="browser_loading">Loading Chromium…</string>
+    <string name="browser_error_generic">Something went wrong. Please try again.</string>
+
+    <!-- Settings (long-press shortcut only) -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_display_size">Display scale</string>
+    <string name="settings_touch_mode">Touch-friendly mode</string>
+    <string name="settings_mouse_support">Mouse / pointer support</string>
+    <string name="settings_about">About</string>
+    <string name="settings_reset_env">Reset Alpine environment</string>
+    <string name="settings_reset_confirm">This removes the installed rootfs and Chromium. You will need to set up again.</string>
+
+    <!-- Shortcuts -->
+    <string name="shortcut_settings_short">Settings</string>
+    <string name="shortcut_settings_long">Open Alpine Chrome settings</string>
+
+    <!-- Notifications (session only) -->
+    <string name="notif_channel_session">Chromium session</string>
+    <string name="notif_session_title">Chromium is running</string>
+    <string name="notif_session_text">Tap to return. Session stops when you leave the app.</string>
+</resources>
