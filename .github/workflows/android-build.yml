@@ -21,6 +21,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -28,49 +33,36 @@ jobs:
         run: |
           sdkmanager --install \
             "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.0.12077973" \
-            "cmake;3.22.1"
+            "build-tools;36.0.0"
           yes | sdkmanager --licenses || true
 
-      # Optional: drop prebuilt proot libs into jniLibs if not committed
       - name: Verify native libs (proot)
         run: |
           echo "Expected under app/src/main/jniLibs/arm64-v8a/ :"
           echo "  libproot.so  libproot-loader.so  libtalloc.so  libtalloc.so.2"
           ls -la app/src/main/jniLibs/arm64-v8a/ || echo "(empty — copy binaries before release build)"
 
-      - name: Make gradlew executable
+      - name: Generate Gradle Wrapper
         run: |
-          if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
+          gradle wrapper --gradle-version 8.9
+          chmod +x ./gradlew
 
       - name: Build Debug APK
-        working-directory: .
-        run: |
-          if [ -f ./gradlew ]; then
-            ./gradlew :app:assembleDebug --stacktrace
-          else
-            # Bootstrap wrapper if missing
-            gradle wrapper --gradle-version 8.9 || true
-            chmod +x ./gradlew
-            ./gradlew :app:assembleDebug --stacktrace
-          fi
+        run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Build Release APK (unsigned if no secrets)
-        working-directory: .
+      - name: Build Release APK
         env:
-          STORE_FILE: ${{ secrets.STORE_FILE && 'app/release.keystore' || '' }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
-            export STORE_FILE=app/release.keystore
+            export STORE_FILE="$GITHUB_WORKSPACE/app/release.keystore"
             ./gradlew :app:assembleRelease --stacktrace
           else
-            echo "No KEYSTORE_BASE64 secret — skipping signed release"
-            ./gradlew :app:assembleRelease --stacktrace || ./gradlew :app:assembleDebug --stacktrace
+            echo "No KEYSTORE_BASE64 secret — building unsigned release"
+            ./gradlew :app:assembleRelease --stacktrace
           fi
 
       - name: Upload APKs
@@ -80,3 +72,4 @@ jobs:
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn

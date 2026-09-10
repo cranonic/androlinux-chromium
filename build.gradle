@@ -1,3 +1,6 @@
 plugins {
     id 'com.android.application' version '8.7.3' apply false
 }
+
+// Shared SDK + library versions for all modules
+apply from: 'variables.gradle'
