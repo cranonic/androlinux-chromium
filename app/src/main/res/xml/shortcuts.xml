@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Long-press app icon → only Settings shortcut (as requested) -->
+<!-- Long-press app icon → Settings only. targetPackage omitted so system uses this app's applicationId. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:shortcutId="settings"
@@ -9,7 +9,6 @@
         android:shortcutLongLabel="@string/shortcut_settings_long">
         <intent
             android:action="com.alpine.chrome.OPEN_SETTINGS"
-            android:targetPackage="com.alpine.chrome"
             android:targetClass="com.alpine.chrome.ui.MainActivity" />
     </shortcut>
 </shortcuts>

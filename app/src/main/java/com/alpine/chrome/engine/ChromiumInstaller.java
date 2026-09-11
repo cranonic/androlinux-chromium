@@ -97,6 +97,11 @@ public class ChromiumInstaller {
      * Guest-side helper: starts Xvfb + x11vnc + chromium with touch-friendly flags.
      * Display :1, VNC on 5901. Android side connects via noVNC/WebView.
      */
+    /** Public so session start can refresh the helper after code updates. */
+    public void ensureLaunchHelper() throws IOException {
+        writeLaunchHelper();
+    }
+
     private void writeLaunchHelper() throws IOException {
         File bin = new File(rootfs.getRootfsPath(), "usr/local/bin");
         bin.mkdirs();
@@ -105,24 +110,30 @@ public class ChromiumInstaller {
                 "#!/bin/sh\n"
                         + "export DISPLAY=:1\n"
                         + "export HOME=/root\n"
+                        + "export XDG_RUNTIME_DIR=/tmp\n"
                         + "pkill -f 'Xvfb :1' 2>/dev/null || true\n"
                         + "pkill -f 'x11vnc' 2>/dev/null || true\n"
                         + "pkill -f chromium 2>/dev/null || true\n"
-                        + "Xvfb :1 -screen 0 1280x720x24 -ac +\n"
-                        + "sleep 0.5\n"
-                        + "x11vnc -display :1 -rfbport 5901 -localhost -forever -shared -nopw -xkb &\n"
-                        + "sleep 0.3\n"
-                        + "# Prefer chromium-browser name; fall back to chromium\n"
+                        + "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true\n"
+                        + "echo '[ac] starting Xvfb'\n"
+                        + "Xvfb :1 -screen 0 1280x720x24 -ac &\n"
+                        + "sleep 1\n"
+                        + "echo '[ac] starting x11vnc on 5901'\n"
+                        + "x11vnc -display :1 -rfbport 5901 -localhost -forever -shared -nopw -xkb -ncache 0 &\n"
+                        + "sleep 1\n"
                         + "CHROME=$(command -v chromium-browser || command -v chromium)\n"
+                        + "if [ -z \"$CHROME\" ]; then echo '[ac] chromium not found'; exit 1; fi\n"
+                        + "echo \"[ac] launching $CHROME\"\n"
                         + "exec \"$CHROME\" \\\n"
                         + "  --no-sandbox \\\n"
                         + "  --disable-dev-shm-usage \\\n"
                         + "  --disable-gpu \\\n"
-                        + "  --disable-software-rasterizer \\\n"
+                        + "  --use-gl=swiftshader \\\n"
                         + "  --user-data-dir=/root/.config/chromium \\\n"
                         + "  --window-size=1280,720 \\\n"
                         + "  --start-maximized \\\n"
                         + "  --disable-features=TranslateUI \\\n"
+                        + "  --no-first-run \\\n"
                         + "  about:blank\n";
         try (FileOutputStream out = new FileOutputStream(script)) {
             out.write(body.getBytes("UTF-8"));

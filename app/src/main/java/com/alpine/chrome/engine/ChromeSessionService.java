@@ -4,7 +4,9 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -15,21 +17,34 @@ import com.alpine.chrome.ui.MainActivity;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.Map;
 
 /**
  * Short-lived foreground service while Chromium preview is active.
- * Stops itself when the user leaves the app / session ends — does NOT run all day.
+ * Starts guest Xvfb/x11vnc/Chromium + local WebSocket→VNC bridge for WebView.
  */
 public class ChromeSessionService extends Service {
 
     private static final String TAG = "ChromeSessionService";
     public static final String ACTION_START = "com.alpine.chrome.action.START_SESSION";
     public static final String ACTION_STOP = "com.alpine.chrome.action.STOP_SESSION";
+    public static final String ACTION_SESSION_READY = "com.alpine.chrome.action.SESSION_READY";
+    public static final String ACTION_SESSION_STATUS = "com.alpine.chrome.action.SESSION_STATUS";
+    public static final String EXTRA_STATUS = "status";
+    public static final String EXTRA_WS_PORT = "ws_port";
+
+    public static final int VNC_PORT = 5901;
+    public static final int WS_PORT = 6080;
+
     private static final int NOTIF_ID = 42;
 
     private Process chromiumProcess;
     private Thread readerThread;
+    private WsTcpBridge bridge;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private volatile boolean stopping;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -47,7 +62,7 @@ public class ChromeSessionService extends Service {
 
         startForeground(NOTIF_ID, buildNotification());
         startChromiumProcess();
-        return START_NOT_STICKY; // do not restart if killed
+        return START_NOT_STICKY;
     }
 
     private Notification buildNotification() {
@@ -68,36 +83,106 @@ public class ChromeSessionService extends Service {
                 .build();
     }
 
+    private void broadcastStatus(String status) {
+        SessionLog.i(TAG, status);
+        SessionEvents.fireStatus(status);
+    }
+
     private void startChromiumProcess() {
         if (chromiumProcess != null) return;
-        try {
-            RootfsManager mgr = new RootfsManager(this);
-            ProotCommandBuilder proot = new ProotCommandBuilder(mgr);
-            String[] cmd = proot.buildShellCommand("/usr/local/bin/ac-start-chromium");
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.redirectErrorStream(true);
-            Map<String, String> env = pb.environment();
-            env.putAll(proot.buildEnv());
-            chromiumProcess = pb.start();
-            readerThread = new Thread(() -> {
-                try (BufferedReader r = new BufferedReader(
-                        new InputStreamReader(chromiumProcess.getInputStream()))) {
-                    String line;
-                    while ((line = r.readLine()) != null) {
-                        Log.d(TAG, line);
-                    }
-                } catch (Exception ignored) {
+        stopping = false;
+        broadcastStatus("Starting Chromium session…");
+
+        new Thread(() -> {
+            try {
+                // Bridge first so it is ready when VNC comes up
+                if (bridge == null) {
+                    bridge = new WsTcpBridge(WS_PORT, VNC_PORT);
+                    bridge.start();
                 }
-            }, "chromium-log");
-            readerThread.setDaemon(true);
-            readerThread.start();
+
+                RootfsManager mgr = new RootfsManager(this);
+                // Refresh launch script (fixes Xvfb backgrounding etc. after updates)
+                try {
+                    new ChromiumInstaller(mgr).ensureLaunchHelper();
+                } catch (Exception e) {
+                    SessionLog.e(TAG, "ensureLaunchHelper: " + e.getMessage());
+                }
+                ProotCommandBuilder proot = new ProotCommandBuilder(mgr);
+                String[] cmd = proot.buildShellCommand("/usr/local/bin/ac-start-chromium");
+                SessionLog.i(TAG, "exec: " + String.join(" ", cmd));
+                ProcessBuilder pb = new ProcessBuilder(cmd);
+                pb.redirectErrorStream(true);
+                Map<String, String> env = pb.environment();
+                env.putAll(proot.buildEnv());
+                chromiumProcess = pb.start();
+                broadcastStatus("Guest process started, waiting for display…");
+
+                readerThread = new Thread(() -> {
+                    try (BufferedReader r = new BufferedReader(
+                            new InputStreamReader(chromiumProcess.getInputStream()))) {
+                        String line;
+                        while ((line = r.readLine()) != null) {
+                            Log.d(TAG, line);
+                            SessionLog.append(line);
+                        }
+                    } catch (Exception e) {
+                        SessionLog.e(TAG, "reader: " + e.getMessage());
+                    }
+                }, "chromium-log");
+                readerThread.setDaemon(true);
+                readerThread.start();
+
+                // Poll VNC port
+                boolean ready = false;
+                for (int i = 0; i < 60 && !stopping; i++) {
+                    if (isPortOpen("127.0.0.1", VNC_PORT, 300)) {
+                        ready = true;
+                        break;
+                    }
+                    if (i % 5 == 0) {
+                        broadcastStatus("Waiting for display bridge… (" + (i + 1) + "s)");
+                    }
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+
+                if (ready) {
+                    broadcastStatus("Display ready — connecting preview");
+                    SessionEvents.fireReady(WS_PORT);
+                } else {
+                    broadcastStatus("Display not ready — check Logs for details");
+                    SessionLog.e(TAG, "VNC port " + VNC_PORT + " never opened");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to start Chromium session", e);
+                SessionLog.e(TAG, "start failed: " + e.getMessage());
+                broadcastStatus("Session failed: " + e.getMessage());
+                stopSelf();
+            }
+        }, "session-start").start();
+    }
+
+    private static boolean isPortOpen(String host, int port, int timeoutMs) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(host, port), timeoutMs);
+            return true;
         } catch (Exception e) {
-            Log.e(TAG, "Failed to start Chromium session", e);
-            stopSelf();
+            return false;
         }
     }
 
     private void stopSession() {
+        stopping = true;
+        broadcastStatus("Stopping session…");
+        if (bridge != null) {
+            bridge.stop();
+            bridge = null;
+        }
         if (chromiumProcess != null) {
             chromiumProcess.destroy();
             try {
@@ -107,7 +192,6 @@ public class ChromeSessionService extends Service {
             }
             chromiumProcess = null;
         }
-        // Best-effort kill leftover guest processes via a short proot call
         try {
             RootfsManager mgr = new RootfsManager(this);
             ProotCommandBuilder proot = new ProotCommandBuilder(mgr);
@@ -120,6 +204,7 @@ public class ChromeSessionService extends Service {
             p.waitFor();
         } catch (Exception ignored) {
         }
+        SessionLog.i(TAG, "Session stopped");
     }
 
     @Override

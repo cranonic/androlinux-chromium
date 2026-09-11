@@ -7,7 +7,7 @@
     android:layout_height="match_parent"
     android:background="@color/md_bg">
 
-    <!-- Chromium preview surface: WebView hosts noVNC / remote display for full touch -->
+    <!-- Chromium preview surface: WebView hosts noVNC / remote display -->
     <WebView
         android:id="@+id/preview"
         android:layout_width="match_parent"
@@ -40,9 +40,11 @@
 
         <TextView
             android:id="@+id/loading_text"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:layout_marginHorizontal="24dp"
+            android:gravity="center"
             android:text="@string/browser_loading"
             android:textAppearance="?attr/textAppearanceBodyLarge"
             android:textColor="@color/md_on_surface_variant"
@@ -86,4 +88,16 @@
             android:textColor="@color/md_error"
             android:textIsSelectable="true" />
     </com.google.android.material.card.MaterialCardView>
+
+    <!-- Logs FAB — visibility controlled from Settings -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_logs"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:contentDescription="@string/logs_title"
+        app:srcCompat="@android:drawable/ic_menu_info_details"
+        app:tint="@color/md_on_primary"
+        app:backgroundTint="@color/md_primary" />
 </FrameLayout>

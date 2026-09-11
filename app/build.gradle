@@ -10,8 +10,10 @@ android {
         applicationId "com.alpine.chrome"
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        // Bump versionCode on every release so Android allows in-place update
+        // without uninstall (preserves downloaded Chromium / rootfs data).
+        versionCode 3
+        versionName "1.0.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Keep binary assets uncompressed (rootfs archives, native libs)
@@ -21,7 +23,6 @@ android {
 
         ndk {
             abiFilters "arm64-v8a"
-            // Add "armeabi-v7a" when 32-bit binaries are provided
         }
     }
 
@@ -33,13 +34,18 @@ android {
     }
 
     signingConfigs {
+        // Stable project keystore — same signature across builds → in-place updates
         release {
-            def storeFilePath = System.getenv("STORE_FILE")
-            if (storeFilePath != null && !storeFilePath.isEmpty()) {
-                storeFile file(storeFilePath)
-                storePassword System.getenv("STORE_PASSWORD")
-                keyAlias System.getenv("KEY_ALIAS")
-                keyPassword System.getenv("KEY_PASSWORD")
+            def ksPath = System.getenv("STORE_FILE")
+            if (ksPath == null || ksPath.isEmpty()) {
+                ksPath = "${projectDir}/keystore/chromium-release.jks"
+            }
+            def ksFile = file(ksPath)
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword System.getenv("STORE_PASSWORD") ?: "chromium123"
+                keyAlias System.getenv("KEY_ALIAS") ?: "chromium"
+                keyPassword System.getenv("KEY_PASSWORD") ?: "chromium123"
             }
         }
     }
@@ -48,14 +54,19 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            def storeFilePath = System.getenv("STORE_FILE")
-            if (storeFilePath != null && !storeFilePath.isEmpty()) {
+            // Always sign when keystore is present (local + CI)
+            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
                 signingConfig signingConfigs.release
             }
         }
         debug {
-            applicationIdSuffix ".debug"
+            // Same applicationId as release so installs update in place
+            // (no ".debug" suffix — that forced uninstall + re-download).
             versionNameSuffix "-debug"
+            // Sign debug with the same key so switching debug↔release still updates
+            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 

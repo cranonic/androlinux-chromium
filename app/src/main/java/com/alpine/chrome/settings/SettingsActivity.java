@@ -44,6 +44,10 @@ public class SettingsActivity extends AppCompatActivity {
         mouse.setChecked(Prefs.isMouseSupport());
         mouse.setOnCheckedChangeListener((b, c) -> Prefs.setMouseSupport(c));
 
+        MaterialSwitch logsFab = findViewById(R.id.switch_logs_fab);
+        logsFab.setChecked(Prefs.isLogsFabEnabled());
+        logsFab.setOnCheckedChangeListener((b, c) -> Prefs.setLogsFabEnabled(c));
+
         MaterialButton reset = findViewById(R.id.btn_reset_env);
         reset.setOnClickListener(v -> confirmReset());
 

@@ -66,6 +66,15 @@
                 android:text="@string/settings_mouse_support"
                 android:textColor="@color/md_on_surface" />
 
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_logs_fab"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:checked="true"
+                android:text="@string/settings_logs_fab"
+                android:textColor="@color/md_on_surface" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"

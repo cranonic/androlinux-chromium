@@ -57,6 +57,15 @@ public final class Prefs {
         sp.edit().putBoolean("mouse_support", v).apply();
     }
 
+    /** Floating logs button on main screen (default on for easier debugging). */
+    public static boolean isLogsFabEnabled() {
+        return sp.getBoolean("logs_fab", true);
+    }
+
+    public static void setLogsFabEnabled(boolean v) {
+        sp.edit().putBoolean("logs_fab", v).apply();
+    }
+
     /** Wipe setup flags after user resets environment. */
     public static void clearSetup() {
         sp.edit()

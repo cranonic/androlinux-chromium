@@ -54,4 +54,13 @@
     <string name="notif_channel_session">Chromium session</string>
     <string name="notif_session_title">Chromium is running</string>
     <string name="notif_session_text">Tap to return. Session stops when you leave the app.</string>
+
+    <!-- Logs viewer -->
+    <string name="logs_title">Session logs</string>
+    <string name="logs_clear">Clear</string>
+    <string name="logs_copy">Copy</string>
+    <string name="logs_copied">Logs copied</string>
+    <string name="logs_empty">No log lines yet. Start a session and output will appear here.</string>
+    <string name="settings_logs_fab">Show logs button</string>
+    <string name="settings_logs_fab_desc">Floating button on the browser screen opens session logs</string>
 </resources>

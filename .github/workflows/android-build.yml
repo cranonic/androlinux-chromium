@@ -1,4 +1,4 @@
-name: Android Debug Build
+name: Android Signed Build
 
 on:
   push:
@@ -28,20 +28,42 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew || true
 
-      - name: Build debug APK only
+      # Optional: override keystore via secrets (STORE_FILE_BASE64, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)
+      - name: Install keystore from secrets (if provided)
+        env:
+          STORE_FILE_BASE64: ${{ secrets.STORE_FILE_BASE64 }}
         run: |
-          if [ -f ./gradlew ]; then
-            ./gradlew :app:assembleDebug --stacktrace
+          if [ -n "$STORE_FILE_BASE64" ]; then
+            mkdir -p app/keystore
+            echo "$STORE_FILE_BASE64" | base64 -d > app/keystore/chromium-release.jks
+            echo "Using keystore from secrets"
+          elif [ -f app/keystore/chromium-release.jks ]; then
+            echo "Using project keystore"
           else
-            # fallback if wrapper missing
-            gradle :app:assembleDebug --stacktrace
+            echo "WARNING: no keystore found — APK may be unsigned"
           fi
 
-      - name: Upload debug APK
+      - name: Build signed release APK
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          # Defaults match project keystore when secrets are empty
+          export STORE_PASSWORD="${STORE_PASSWORD:-chromium123}"
+          export KEY_ALIAS="${KEY_ALIAS:-chromium}"
+          export KEY_PASSWORD="${KEY_PASSWORD:-chromium123}"
+          if [ -f ./gradlew ]; then
+            ./gradlew :app:assembleRelease --stacktrace
+          else
+            gradle :app:assembleRelease --stacktrace
+          fi
+
+      - name: Upload signed release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-release-signed
           path: |
-            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
