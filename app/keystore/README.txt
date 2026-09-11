@@ -1,8 +1,8 @@
 Project signing keystore (chromium-release.jks)
 Default passwords (local / CI without secrets):
-  storePassword = chromium123
+  storePassword = 808080
   keyAlias      = chromium
-  keyPassword   = chromium123
+  keyPassword   = 808080
 
 Same signature + same applicationId + higher versionCode
 = in-place update without uninstall (rootfs / Chromium data kept).
