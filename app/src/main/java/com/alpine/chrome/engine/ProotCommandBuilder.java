@@ -40,6 +40,14 @@ public class ProotCommandBuilder {
 
     public Map<String, String> buildEnv() {
         Map<String, String> env = new HashMap<>();
+        // Required so the dynamic linker finds libtalloc.so next to libproot.so
+        // (both live under nativeLibraryDir from jniLibs).
+        String existingLd = System.getenv("LD_LIBRARY_PATH");
+        if (existingLd != null && !existingLd.isEmpty()) {
+            env.put("LD_LIBRARY_PATH", nativeLibDir + ":" + existingLd);
+        } else {
+            env.put("LD_LIBRARY_PATH", nativeLibDir);
+        }
         env.put("PROOT_TMP_DIR", tmpPath);
         env.put("PROOT_LOADER", nativeLibDir + "/libproot-loader.so");
         File l32 = new File(nativeLibDir, "libproot-loader32.so");
