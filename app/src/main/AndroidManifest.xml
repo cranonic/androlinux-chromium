@@ -35,7 +35,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Runs the lightweight Alpine Chromium session only while the user is actively viewing the browser preview" />
+                android:value="Runs the Chromium session only while the user is actively viewing the browser preview" />
         </service>
 
         <activity

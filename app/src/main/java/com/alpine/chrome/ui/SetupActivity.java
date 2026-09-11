@@ -53,7 +53,7 @@ public class SetupActivity extends AppCompatActivity {
         errorCard.setVisibility(View.GONE);
         progress.setIndeterminate(true);
         progress.setVisibility(View.VISIBLE);
-        status.setText(R.string.setup_status_downloading);
+        status.setText(R.string.setup_status_downloading); // "Downloading environment…"
 
         new Thread(() -> {
             RootfsManager.ProgressListener listener = new RootfsManager.ProgressListener() {

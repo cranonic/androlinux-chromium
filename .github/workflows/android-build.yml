@@ -1,4 +1,4 @@
-name: Alpine Chrome Android Build
+name: Android Debug Build
 
 on:
   push:
@@ -10,77 +10,38 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
+          distribution: temurin
+          java-version: 17
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install SDK packages
-        run: |
-          sdkmanager --install \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
-          yes | sdkmanager --licenses || true
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || true
 
-      - name: Verify native libs (proot)
+      - name: Build debug APK only
         run: |
-          echo "Expected under app/src/main/jniLibs/arm64-v8a/ :"
-          echo "  libproot.so  libproot-loader.so  libtalloc.so  libtalloc.so.2"
-          ls -la app/src/main/jniLibs/arm64-v8a/ || echo "(empty — copy binaries before release build)"
-
-      - name: Generate Gradle Wrapper
-        run: |
-          gradle wrapper --gradle-version 8.11.1
-          chmod +x ./gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
-
-      - name: Build Release APK
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -e
-          if [ -n "${KEYSTORE_BASE64:-}" ]; then
-            # Decode safely; fall back to unsigned if secret is malformed
-            if printf '%s' "$KEYSTORE_BASE64" | base64 --decode > app/release.keystore 2>/dev/null \
-               && [ -s app/release.keystore ]; then
-              export STORE_FILE="$GITHUB_WORKSPACE/app/release.keystore"
-              echo "Signing with provided keystore"
-              ./gradlew :app:assembleRelease --stacktrace
-            else
-              echo "KEYSTORE_BASE64 present but invalid — building unsigned release"
-              rm -f app/release.keystore
-              unset STORE_FILE
-              ./gradlew :app:assembleRelease --stacktrace
-            fi
+          if [ -f ./gradlew ]; then
+            ./gradlew :app:assembleDebug --stacktrace
           else
-            echo "No KEYSTORE_BASE64 secret — building unsigned release"
-            ./gradlew :app:assembleRelease --stacktrace
+            # fallback if wrapper missing
+            gradle :app:assembleDebug --stacktrace
           fi
 
-      - name: Upload APKs
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: AlpineChrome-APK
+          name: app-debug
           path: |
             app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 14

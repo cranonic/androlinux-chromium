@@ -1,22 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Alpine Chrome</string>
-    <string name="title_activity_main">Alpine Chrome</string>
+    <string name="app_name">Chromium</string>
+    <string name="title_activity_main">Chromium</string>
 
     <!-- Splash / loading -->
     <string name="splash_loading">Starting…</string>
 
     <!-- Onboarding -->
-    <string name="onboarding_welcome_title">Welcome to Alpine Chrome</string>
-    <string name="onboarding_welcome_body">Run a lightweight Linux Chromium browser on your phone. Minimal packages, smooth touch, and a clean Android experience.</string>
+    <string name="onboarding_welcome_title">Welcome</string>
+    <string name="onboarding_welcome_body">Run a full Chromium browser on your phone. Lightweight setup, smooth touch, and a clean Android experience.</string>
     <string name="onboarding_perm_title">Permissions</string>
-    <string name="onboarding_perm_body">Storage is used for the Alpine environment. Notifications keep the short-lived session indicator visible only while you browse.</string>
+    <string name="onboarding_perm_body">Storage is used for the browser environment. Notifications keep a short-lived session indicator visible only while you browse.</string>
     <string name="onboarding_storage_label">Storage access</string>
-    <string name="onboarding_storage_desc">Needed to install and run the Alpine rootfs</string>
+    <string name="onboarding_storage_desc">Needed to install and run the browser environment</string>
     <string name="onboarding_notif_label">Notifications</string>
     <string name="onboarding_notif_desc">Shown only while Chromium is running (not all day)</string>
     <string name="onboarding_details_title">Almost ready</string>
-    <string name="onboarding_details_body">Next we install a minimal Alpine Linux environment and Chromium. Only required packages are downloaded — no bloat. You can start browsing as soon as setup finishes.</string>
+    <string name="onboarding_details_body">Next we install a minimal Chromium environment. Only required packages are downloaded — no bloat. You can start browsing as soon as setup finishes.</string>
+    <string name="onboarding_perm_required">Please allow storage and notification access to continue</string>
     <string name="btn_next">Next</string>
     <string name="btn_allow">Allow</string>
     <string name="btn_skip">Skip for now</string>
@@ -24,8 +25,8 @@
 
     <!-- Setup / install -->
     <string name="setup_title">Setting up Chromium</string>
-    <string name="setup_subtitle">Lightweight Alpine install in progress</string>
-    <string name="setup_status_downloading">Downloading Alpine rootfs…</string>
+    <string name="setup_subtitle">Installing the browser environment</string>
+    <string name="setup_status_downloading">Downloading environment…</string>
     <string name="setup_status_extracting">Extracting environment…</string>
     <string name="setup_status_packages">Installing Chromium (minimal)…</string>
     <string name="setup_status_ready">Ready — launching preview</string>
@@ -42,12 +43,12 @@
     <string name="settings_touch_mode">Touch-friendly mode</string>
     <string name="settings_mouse_support">Mouse / pointer support</string>
     <string name="settings_about">About</string>
-    <string name="settings_reset_env">Reset Alpine environment</string>
-    <string name="settings_reset_confirm">This removes the installed rootfs and Chromium. You will need to set up again.</string>
+    <string name="settings_reset_env">Reset browser environment</string>
+    <string name="settings_reset_confirm">This removes the installed environment and Chromium. You will need to set up again.</string>
 
     <!-- Shortcuts -->
     <string name="shortcut_settings_short">Settings</string>
-    <string name="shortcut_settings_long">Open Alpine Chrome settings</string>
+    <string name="shortcut_settings_long">Open Chromium settings</string>
 
     <!-- Notifications (session only) -->
     <string name="notif_channel_session">Chromium session</string>

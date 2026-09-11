@@ -1,4 +1,4 @@
-# Alpine Chrome — Binary files, icons, folders
+# Chromium app — Binary files, icons, folders
 
 Place these before a release / CI build. Paths are relative to the Android module root `app/`.
 
@@ -28,21 +28,23 @@ app/src/main/jniLibs/armeabi-v7a/
 > **Why `lib*.so`?**  
 > With `targetSdk > 28`, Android blocks executing binaries from `filesDir`. Shipping them as `jniLibs` puts them under `nativeLibraryDir`, which is executable.
 
-## 2. Optional Alpine rootfs asset (keeps first run offline)
+## 2. Optional rootfs asset (offline first-run)
 
-If present, setup skips the CDN download:
+**Preferred order at runtime:** online download first; asset is fallback only.
+
+If present, setup can use it when the CDN download fails:
 
 ```
 app/src/main/assets/
-  alpine-aarch64.zip       # contains alpine-minirootfs-*-aarch64.tar.gz
-  # or alpine-aarch64.tar.gz directly (see RootfsManager)
+  alpine-aarch64.tar.gz    # preferred — direct minirootfs tar.gz
+  # or alpine-aarch64.zip  # zip containing a single .tar.gz
 ```
 
-Official source example:
+Official source example (aarch64):
 
-- https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/aarch64/
+- https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/aarch64/alpine-minirootfs-3.24.1-aarch64.tar.gz
 
-Online download still works when the asset is absent (smaller APK).
+For smaller/faster CI builds you can omit the asset entirely (internet required on first run).
 
 ## 3. Icons / logo
 
@@ -70,9 +72,9 @@ res/mipmap-xxxhdpi/ic_launcher.png
 
 Recommended: 512×512 Play icon + feature graphic separately (not in APK).
 
-## 4. What gets installed *inside* Alpine (runtime, not APK)
+## 4. What gets installed at runtime (not in APK)
 
-Via `apk` during SetupActivity (minimal set only):
+Via package manager during SetupActivity (minimal set only):
 
 - `chromium` (or `chromium-browser`)
 - `mesa-egl`, `mesa-gl`
@@ -90,7 +92,7 @@ Launch helper written to guest:
 
 ```
 files/
-  alpine_core/          # Alpine rootfs (etc/alpine-release)
+  alpine_core/          # rootfs (etc/alpine-release)
   home/                 # bind-mounted to guest /root
   tmp/
 ```
@@ -103,17 +105,12 @@ Workflow file:
 .github/workflows/android-build.yml
 ```
 
-Secrets (optional, for signed release):
-
-- `KEYSTORE_BASE64`
-- `STORE_PASSWORD`
-- `KEY_ALIAS`
-- `KEY_PASSWORD`
+Builds **debug APK only**. No release / unsigned APK is generated.
 
 ## 7. Play Store notes
 
 - `minSdk 26`, `targetSdk 36`, `compileSdk 36`
 - Foreground service type `specialUse` — only while user is in the browser session; stopped in `onStop`
 - No permanent background Chromium
-- Storage + notifications requested in onboarding with Material switches
+- Storage + notifications requested in onboarding; Next is blocked until granted
 - Long-press app icon exposes **only** Settings shortcut

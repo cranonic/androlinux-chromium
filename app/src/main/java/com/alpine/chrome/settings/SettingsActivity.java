@@ -49,7 +49,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         TextView about = findViewById(R.id.about_text);
         about.setText(getString(R.string.app_name) + " " + BuildConfig.VERSION_NAME
-                + "\nLightweight Alpine Chromium");
+                + "\nLightweight Chromium preview");
     }
 
     private void confirmReset() {

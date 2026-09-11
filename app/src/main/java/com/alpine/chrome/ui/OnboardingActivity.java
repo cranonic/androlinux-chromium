@@ -10,6 +10,7 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -23,8 +24,8 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.materialswitch.MaterialSwitch;
 
 /**
- * First-run flow: welcome → permissions (storage + notifications toggles) → details → setup.
- * Circular Next FAB bottom-right, Chromium logo slightly above center.
+ * First-run flow: welcome → permissions (storage + notifications) → details → setup.
+ * Next is blocked on the permissions page until required access is granted.
  */
 public class OnboardingActivity extends AppCompatActivity {
 
@@ -35,10 +36,12 @@ public class OnboardingActivity extends AppCompatActivity {
     private View dot0, dot1, dot2;
     private MaterialSwitch switchStorage;
     private MaterialSwitch switchNotif;
+    private FloatingActionButton btnNext;
 
     private final ActivityResultLauncher<String> notifPermission =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
                 switchNotif.setChecked(granted);
+                updateNextEnabled();
             });
 
     private final ActivityResultLauncher<String[]> storagePermission =
@@ -48,6 +51,7 @@ public class OnboardingActivity extends AppCompatActivity {
                     if (b == null || !b) ok = false;
                 }
                 switchStorage.setChecked(ok || hasStorageAccess());
+                updateNextEnabled();
             });
 
     @Override
@@ -63,7 +67,7 @@ public class OnboardingActivity extends AppCompatActivity {
         dot2 = findViewById(R.id.dot2);
         switchStorage = findViewById(R.id.switch_storage);
         switchNotif = findViewById(R.id.switch_notification);
-        FloatingActionButton btnNext = findViewById(R.id.btn_next);
+        btnNext = findViewById(R.id.btn_next);
 
         switchStorage.setChecked(hasStorageAccess());
         switchNotif.setChecked(hasNotifAccess());
@@ -72,11 +76,13 @@ public class OnboardingActivity extends AppCompatActivity {
             if (checked && !hasStorageAccess()) {
                 requestStorage();
             }
+            updateNextEnabled();
         });
         switchNotif.setOnCheckedChangeListener((button, checked) -> {
             if (checked && !hasNotifAccess()) {
                 requestNotif();
             }
+            updateNextEnabled();
         });
 
         btnNext.setOnClickListener(v -> nextPage());
@@ -84,6 +90,10 @@ public class OnboardingActivity extends AppCompatActivity {
     }
 
     private void nextPage() {
+        if (page == 1 && !permissionsOk()) {
+            Toast.makeText(this, R.string.onboarding_perm_required, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (page < 2) {
             showPage(page + 1);
         } else {
@@ -113,6 +123,20 @@ public class OnboardingActivity extends AppCompatActivity {
         setDot(dot0, p == 0);
         setDot(dot1, p == 1);
         setDot(dot2, p == 2);
+        updateNextEnabled();
+    }
+
+    private void updateNextEnabled() {
+        if (btnNext == null) return;
+        // On permissions page, Next stays enabled visually but action is blocked + toast.
+        // Still dim slightly when not ready so user gets a hint.
+        boolean allow = page != 1 || permissionsOk();
+        btnNext.setAlpha(allow ? 1f : 0.45f);
+        btnNext.setEnabled(true); // keep clickable so we can show the toast
+    }
+
+    private boolean permissionsOk() {
+        return hasStorageAccess() && hasNotifAccess();
     }
 
     private void setDot(View dot, boolean active) {
@@ -166,5 +190,6 @@ public class OnboardingActivity extends AppCompatActivity {
         super.onResume();
         if (switchStorage != null) switchStorage.setChecked(hasStorageAccess());
         if (switchNotif != null) switchNotif.setChecked(hasNotifAccess());
+        updateNextEnabled();
     }
 }

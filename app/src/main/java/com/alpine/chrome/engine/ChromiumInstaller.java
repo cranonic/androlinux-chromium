@@ -43,7 +43,7 @@ public class ChromiumInstaller {
             return;
         }
         if (!rootfs.isAlpineReady()) {
-            throw new IOException("Alpine rootfs not ready");
+            throw new IOException("Environment not ready");
         }
 
         ensureDns();
@@ -112,7 +112,7 @@ public class ChromiumInstaller {
                         + "sleep 0.5\n"
                         + "x11vnc -display :1 -rfbport 5901 -localhost -forever -shared -nopw -xkb &\n"
                         + "sleep 0.3\n"
-                        + "# Prefer chromium-browser name on Alpine; fall back to chromium\n"
+                        + "# Prefer chromium-browser name; fall back to chromium\n"
                         + "CHROME=$(command -v chromium-browser || command -v chromium)\n"
                         + "exec \"$CHROME\" \\\n"
                         + "  --no-sandbox \\\n"
