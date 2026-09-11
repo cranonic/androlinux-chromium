@@ -117,14 +117,17 @@ public class ProotCommandBuilder {
             cmd.add("-b");
             cmd.add("/etc/resolv.conf:/etc/resolv.conf");
         }
-        File sd = new File("/sdcard");
-        if (sd.exists()) {
-            cmd.add("-b");
-            cmd.add("/sdcard");
-        }
-        if (new File("/storage").exists()) {
-            cmd.add("-b");
-            cmd.add("/storage");
+        // SD card / shared storage (toggle from Settings)
+        if (Prefs.isSdCardEnabled()) {
+            File sd = new File("/sdcard");
+            if (sd.exists()) {
+                cmd.add("-b");
+                cmd.add("/sdcard");
+            }
+            if (new File("/storage").exists()) {
+                cmd.add("-b");
+                cmd.add("/storage");
+            }
         }
     }
 }

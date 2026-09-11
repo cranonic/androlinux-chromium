@@ -6,7 +6,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -166,13 +170,22 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
     }
 
     private void loadNoVnc(int wsPort) {
-        // Use esm.sh so @novnc/novnc is rewritten to pure browser ESM
-        // (jsdelivr raw lib/rfb.js hits "exports is not defined" in WebView).
+        applyImmersive();
+
+        String viewMode = Prefs.getViewMode();
+        boolean scale = Prefs.VIEW_FIT.equals(viewMode) || Prefs.VIEW_REMOTE.equals(viewMode);
+        boolean clip = Prefs.VIEW_FILL.equals(viewMode);
+        boolean remote = Prefs.VIEW_REMOTE.equals(viewMode);
+        boolean showPtr = Prefs.isShowPointer();
+        boolean twoScroll = Prefs.isTwoFingerScroll();
+        float uiScale = Prefs.getDisplayScale();
+
         String html = "<!DOCTYPE html><html><head>"
                 + "<meta charset='utf-8'/>"
                 + "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'/>"
                 + "<style>"
-                + "html,body{margin:0;height:100%;background:#0f1115;overflow:hidden}"
+                + "html,body{margin:0;height:100%;background:#0f1115;overflow:hidden;touch-action:"
+                + (twoScroll ? "none" : "manipulation") + "}"
                 + "#screen{position:fixed;inset:0;background:#000}"
                 + "#status{position:fixed;left:0;right:0;bottom:0;padding:12px;text-align:center;"
                 + "color:#9aa0a6;font:14px sans-serif;background:rgba(0,0,0,.65);z-index:5}"
@@ -185,27 +198,29 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
                 + "const setStatus = (t) => { statusEl.textContent = t; statusEl.style.display = t ? 'block' : 'none'; };\n"
                 + "let rfb = null;\n"
                 + "const WS = 'ws://127.0.0.1:" + wsPort + "';\n"
+                + "const SCALE = " + scale + ";\n"
+                + "const CLIP = " + clip + ";\n"
+                + "const REMOTE = " + remote + ";\n"
+                + "const SHOW_PTR = " + showPtr + ";\n"
                 + "async function connect() {\n"
                 + "  try {\n"
                 + "    setStatus('Loading viewer…');\n"
                 + "    let RFB;\n"
-                + "    try {\n"
-                + "      RFB = (await import('https://esm.sh/@novnc/novnc@1.5.0/lib/rfb.js')).default;\n"
-                + "    } catch (e1) {\n"
-                + "      try {\n"
-                + "        RFB = (await import('https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/+esm')).default;\n"
-                + "      } catch (e2) {\n"
-                + "        RFB = (await import('https://unpkg.com/@novnc/novnc@1.4.0/lib/rfb.js?module')).default;\n"
-                + "      }\n"
+                + "    try { RFB = (await import('https://esm.sh/@novnc/novnc@1.5.0/lib/rfb.js')).default; }\n"
+                + "    catch (e1) {\n"
+                + "      try { RFB = (await import('https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/+esm')).default; }\n"
+                + "      catch (e2) { RFB = (await import('https://unpkg.com/@novnc/novnc@1.4.0/lib/rfb.js?module')).default; }\n"
                 + "    }\n"
                 + "    if (!RFB) throw new Error('RFB module missing');\n"
                 + "    setStatus('Connecting to display…');\n"
                 + "    if (rfb) { try { rfb.disconnect(); } catch (e) {} }\n"
                 + "    rfb = new RFB(document.getElementById('screen'), WS);\n"
-                + "    rfb.scaleViewport = true;\n"
-                + "    rfb.resizeSession = false;\n"
+                + "    rfb.scaleViewport = SCALE;\n"
+                + "    rfb.clipViewport = CLIP;\n"
+                + "    rfb.resizeSession = REMOTE;\n"
                 + "    rfb.background = '#000';\n"
-                + "    rfb.showDotCursor = true;\n"
+                + "    rfb.showDotCursor = SHOW_PTR;\n"
+                + "    rfb.focusOnClick = true;\n"
                 + "    rfb.addEventListener('connect', () => setStatus(''));\n"
                 + "    rfb.addEventListener('disconnect', (e) => {\n"
                 + "      const clean = e.detail && e.detail.clean;\n"
@@ -225,6 +240,7 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
 
         preview.setVisibility(View.VISIBLE);
         loadingOverlay.setVisibility(View.GONE);
+        preview.setInitialScale((int) (uiScale * 100));
         preview.loadDataWithBaseURL(
                 "https://local.chromium.preview/",
                 html,
@@ -232,6 +248,62 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
                 "UTF-8",
                 null
         );
+        setupGestures();
+    }
+
+    private void applyImmersive() {
+        if (!Prefs.isHideStatusBar()) {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            return;
+        }
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        View decor = getWindow().getDecorView();
+        decor.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        );
+    }
+
+    private void setupGestures() {
+        if (preview == null) return;
+        final GestureDetector detector = new GestureDetector(this,
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDoubleTap(MotionEvent e) {
+                        return false;
+                    }
+                });
+        preview.setOnTouchListener((v, event) -> {
+            // Two-finger tap → toggle keyboard
+            if (Prefs.isTwoFingerKeyboard()
+                    && event.getPointerCount() == 2
+                    && event.getActionMasked() == MotionEvent.ACTION_POINTER_UP) {
+                toggleKeyboard();
+                return true;
+            }
+            // Optionally block two-finger scroll by not consuming — noVNC handles touch
+            if (!Prefs.isTwoFingerScroll() && event.getPointerCount() >= 2) {
+                // Still allow single-finger to reach WebView; ignore multi-touch scroll
+                if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+                    return true;
+                }
+            }
+            detector.onTouchEvent(event);
+            return false; // let WebView/noVNC handle the rest
+        });
+    }
+
+    private void toggleKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm == null) return;
+        if (preview != null) {
+            preview.requestFocus();
+            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+        }
     }
 
     private void showError(String msg) {
@@ -279,6 +351,7 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
     protected void onResume() {
         super.onResume();
         updateFabVisibility();
+        applyImmersive();
         SessionEvents.addListener(this);
         if (Prefs.isSetupDone()) {
             startSession();
@@ -302,6 +375,12 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
+                // Prefer hide keyboard on first back if two-finger kb enabled
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null && getCurrentFocus() != null) {
+                    imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+                    return;
+                }
                 if (preview != null && preview.canGoBack()) {
                     preview.goBack();
                 } else {

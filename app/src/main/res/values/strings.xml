@@ -63,4 +63,30 @@
     <string name="logs_empty">No log lines yet. Start a session and output will appear here.</string>
     <string name="settings_logs_fab">Show logs button</string>
     <string name="settings_logs_fab_desc">Floating button on the browser screen opens session logs</string>
+
+    <string name="settings_section_display">Display</string>
+    <string name="settings_section_resolution">Virtual screen</string>
+    <string name="settings_section_input">Input</string>
+    <string name="settings_section_perf">Performance &amp; VNC</string>
+    <string name="settings_section_storage">Storage</string>
+    <string name="settings_section_app">App</string>
+    <string name="settings_view_mode">View mode</string>
+    <string name="settings_view_fit">Fit (show full screen, may letterbox)</string>
+    <string name="settings_view_fill">Fill (crop edges)</string>
+    <string name="settings_view_remote">Match phone (resize remote)</string>
+    <string name="settings_hide_status">Hide status bar</string>
+    <string name="settings_show_pointer">Show mouse pointer</string>
+    <string name="settings_resolution_hint">Portrait presets fill the phone upright. Landscape presets look like a desktop and may letterbox in portrait.</string>
+    <string name="settings_two_finger_kb">Two-finger tap toggles keyboard</string>
+    <string name="settings_two_finger_scroll">Two-finger scroll</string>
+    <string name="settings_vnc_quality">VNC image quality</string>
+    <string name="settings_perf_mode">Performance mode (faster VNC)</string>
+    <string name="settings_try_gpu">Try GPU path (experimental, may crash)</string>
+    <string name="settings_perf_hint">Under proot, true GPU is limited. Prefer lower resolution + performance mode for smoother feel.</string>
+    <string name="settings_sdcard">Mount SD card inside environment</string>
+    <string name="settings_open_sdcard">Open SD card in browser</string>
+    <string name="settings_open_files">Open internal files in browser</string>
+    <string name="settings_restart_hint">Resolution, GPU and VNC quality apply on next session start (leave and reopen the app).</string>
+    <string name="settings_open_queued">Will open on next session start</string>
+
 </resources>

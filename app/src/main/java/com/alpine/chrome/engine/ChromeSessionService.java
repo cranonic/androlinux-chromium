@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat;
 
 import com.alpine.chrome.ChromeApplication;
 import com.alpine.chrome.R;
+import com.alpine.chrome.engine.Prefs;
 import com.alpine.chrome.ui.MainActivity;
 
 import java.io.BufferedReader;
@@ -102,9 +103,18 @@ public class ChromeSessionService extends Service {
                 }
 
                 RootfsManager mgr = new RootfsManager(this);
-                // Refresh launch script (fixes Xvfb backgrounding etc. after updates)
+                // Refresh launch script + write display prefs for guest
                 try {
                     new ChromiumInstaller(mgr).ensureLaunchHelper();
+                    java.io.File conf = new java.io.File(mgr.getRootfsPath(), "root/.ac_display.conf");
+                    java.io.File parent = conf.getParentFile();
+                    if (parent != null) parent.mkdirs();
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(conf)) {
+                        fos.write(Prefs.buildDisplayConf().getBytes("UTF-8"));
+                    }
+                    // clear one-shot open URL after writing
+                    Prefs.setPendingOpenUrl("");
+                    SessionLog.i(TAG, "display conf " + Prefs.getVncWidth() + "x" + Prefs.getVncHeight());
                 } catch (Exception e) {
                     SessionLog.e(TAG, "ensureLaunchHelper: " + e.getMessage());
                 }
