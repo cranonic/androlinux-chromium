@@ -5,14 +5,19 @@ import android.os.Build;
 import android.util.Log;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -21,23 +26,19 @@ import java.util.zip.ZipInputStream;
  * Lightweight rootfs manager (proot guest).
  *
  * Layout under filesDir:
- *   alpine_core/     ← rootfs (etc/alpine-release marks ready)
- *   home/            ← optional host-side home bind
+ *   alpine_core/     ← rootfs (etc/alpine-release + bin/busybox mark ready)
+ *   home/
  *   tmp/
  *
- * Prefer online download so APK stays small. Optional fallback asset:
- *   assets/alpine-aarch64.zip  (contains minirootfs-*.tar.gz)
- *   or assets/alpine-aarch64.tar.gz
- *
- * proot binary lives in nativeLibraryDir as libproot.so
- * (targetSdk > 28 cannot exec from writable filesDir).
+ * Prefer online download; optional asset fallback.
+ * Extraction prefers system `tar` (preserves symlinks like /bin/sh → busybox).
  */
 public class RootfsManager {
 
     private static final String TAG = "RootfsManager";
 
-    /** Bump when extract layout changes. */
-    private static final int ROOTFS_VERSION = 1;
+    /** Bump when extract layout / symlink handling changes (forces re-extract). */
+    private static final int ROOTFS_VERSION = 2;
 
     private static final String ROOTFS_AARCH64_URL =
             "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/aarch64/alpine-minirootfs-3.24.1-aarch64.tar.gz";
@@ -49,11 +50,8 @@ public class RootfsManager {
     private final String nativeLibDir;
 
     public interface ProgressListener {
-        /** User-facing short status only (no internal logs). */
         void onStatus(String userMessage);
-        /** 0..100 or -1 for indeterminate. */
         void onProgress(int percent);
-        /** Real errors only — shown to user / developer. */
         void onError(String error);
     }
 
@@ -83,8 +81,12 @@ public class RootfsManager {
     }
 
     public boolean isAlpineReady() {
-        return new File(getRootfsPath(), "etc/alpine-release").exists()
-                && versionMarkerOk();
+        File root = new File(getRootfsPath());
+        if (!new File(root, "etc/alpine-release").exists()) return false;
+        if (!versionMarkerOk()) return false;
+        // Must have a usable shell (busybox or real sh symlink)
+        return new File(root, "bin/busybox").exists()
+                || new File(root, "bin/sh").exists();
     }
 
     public boolean isChromiumInstalled() {
@@ -95,37 +97,44 @@ public class RootfsManager {
 
     private boolean versionMarkerOk() {
         File marker = new File(getRootfsPath(), "etc/.ac_rootfs_ver");
-        if (!marker.exists()) return true;
+        if (!marker.exists()) return false; // force re-extract when marker missing
         try (FileInputStream in = new FileInputStream(marker)) {
             byte[] b = new byte[16];
             int n = in.read(b);
-            if (n <= 0) return true;
+            if (n <= 0) return false;
             int v = Integer.parseInt(new String(b, 0, n).trim());
             return v >= ROOTFS_VERSION;
         } catch (Exception e) {
-            return true;
+            return false;
         }
     }
 
     /**
-     * Ensures rootfs is present. Does NOT install Chromium packages
-     * (that is ChromiumInstaller).
-     *
-     * Order: try online download first; if that fails, fall back to APK asset.
+     * Ensures rootfs is present. Does NOT install Chromium packages.
+     * Order: online download first; asset fallback.
      */
     public void ensureAlpine(ProgressListener listener) throws IOException {
+        installTallocLibrary();
+        ensureDirs();
+
         if (isAlpineReady()) {
             listener.onStatus("Environment ready");
             listener.onProgress(100);
             return;
         }
 
+        // Wipe partial / old broken extract (empty symlink markers etc.)
+        File root = new File(getRootfsPath());
+        if (root.exists()) {
+            Log.w(TAG, "Removing incomplete/old rootfs at " + root);
+            deleteRecursive(root);
+        }
         ensureDirs();
+
         String arch = alpineArch();
         String assetZip = "alpine-" + arch + ".zip";
         String assetTar = "alpine-" + arch + ".tar.gz";
 
-        // 1) Prefer online download
         IOException downloadError = null;
         try {
             listener.onStatus("Downloading environment…");
@@ -139,28 +148,28 @@ public class RootfsManager {
             extractTarGz(getRootfsPath(), tarGz);
             //noinspection ResultOfMethodCallIgnored
             tarGz.delete();
+            postExtractFixups();
             writeVersionMarker();
             if (!isAlpineReady()) {
-                throw new IOException("Extract failed — environment incomplete");
+                throw new IOException("Extract failed — shell not found in environment");
             }
             listener.onProgress(100);
             return;
         } catch (IOException e) {
             downloadError = e;
             Log.w(TAG, "Online download failed, trying asset fallback", e);
-            // clean partial extract so asset path is clean
             deleteRecursive(new File(getRootfsPath()));
             ensureDirs();
         }
 
-        // 2) Fallback: APK asset
         if (assetExists(assetTar)) {
             listener.onStatus("Extracting environment…");
             listener.onProgress(10);
             extractFromAssetTar(assetTar);
+            postExtractFixups();
             writeVersionMarker();
             if (!isAlpineReady()) {
-                throw new IOException("Asset extract failed — environment incomplete");
+                throw new IOException("Asset extract failed — shell not found");
             }
             listener.onProgress(100);
             return;
@@ -169,22 +178,21 @@ public class RootfsManager {
             listener.onStatus("Extracting environment…");
             listener.onProgress(10);
             extractFromAssetZip(assetZip);
+            postExtractFixups();
             writeVersionMarker();
             if (!isAlpineReady()) {
-                throw new IOException("Asset extract failed — environment incomplete");
+                throw new IOException("Asset extract failed — shell not found");
             }
             listener.onProgress(100);
             return;
         }
 
-        // Both paths failed
         String msg = downloadError != null
                 ? downloadError.getMessage()
                 : "Download failed and no offline package found";
         throw new IOException(msg != null ? msg : "Setup failed");
     }
 
-    /** Wipe rootfs so setup can run again. */
     public void resetEnvironment() {
         deleteRecursive(new File(getRootfsPath()));
         Prefs.clearSetup();
@@ -196,6 +204,29 @@ public class RootfsManager {
         new File(getRootfsPath()).mkdirs();
         new File(getTmpPath()).mkdirs();
         new File(filesDir, "home").mkdirs();
+        new File(getRootfsPath(), "tmp").mkdirs();
+    }
+
+    /**
+     * Copy libtalloc into filesDir (mscode reference pattern) so
+     * LD_LIBRARY_PATH=filesDir:nativeLibDir always finds it.
+     */
+    private void installTallocLibrary() throws IOException {
+        File src = new File(nativeLibDir, "libtalloc.so.2");
+        if (!src.exists()) src = new File(nativeLibDir, "libtalloc.so");
+        if (!src.exists()) {
+            Log.w(TAG, "libtalloc not found in nativeLibraryDir");
+            return;
+        }
+        File dest = new File(filesDir, "libtalloc.so.2");
+        if (dest.exists() && dest.length() == src.length()) return;
+        try (InputStream in = new FileInputStream(src);
+             OutputStream out = new FileOutputStream(dest)) {
+            copy(in, out);
+        }
+        //noinspection ResultOfMethodCallIgnored
+        dest.setReadable(true, false);
+        Log.i(TAG, "Installed libtalloc.so.2 → " + dest);
     }
 
     private String alpineArch() {
@@ -237,7 +268,6 @@ public class RootfsManager {
             copy(in, out);
         }
 
-        // Zip may contain a single .tar.gz, or the asset may itself be a misnamed tar.gz
         File tarGz = new File(filesDir, "rootfs-from-zip.tar.gz");
         boolean found = false;
         try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(new FileInputStream(tmpZip)))) {
@@ -253,14 +283,12 @@ public class RootfsManager {
                 }
             }
         } catch (Exception zipEx) {
-            // Not a valid zip — maybe the "zip" is actually the tar.gz renamed
             Log.w(TAG, "Asset not a zip, trying as gzip tar", zipEx);
         }
         //noinspection ResultOfMethodCallIgnored
         tmpZip.delete();
 
         if (!found) {
-            // Re-copy asset and treat as direct tar.gz
             try (InputStream in = context.getAssets().open(assetName);
                  OutputStream out = new FileOutputStream(tarGz)) {
                 copy(in, out);
@@ -273,7 +301,6 @@ public class RootfsManager {
         tarGz.delete();
     }
 
-    /** Fail fast with a clear message instead of cryptic "Not in GZIP format". */
     private void assertGzipMagic(File f) throws IOException {
         if (f == null || !f.exists() || f.length() < 2) {
             throw new IOException("Downloaded package is empty or missing");
@@ -281,7 +308,6 @@ public class RootfsManager {
         try (InputStream in = new FileInputStream(f)) {
             int b0 = in.read();
             int b1 = in.read();
-            // gzip magic: 1f 8b
             if (b0 != 0x1f || b1 != 0x8b) {
                 throw new IOException(
                         "Package is not a valid gzip archive (got "
@@ -300,6 +326,72 @@ public class RootfsManager {
         }
     }
 
+    /**
+     * After extract: ensure /bin/sh works and binaries are executable.
+     * Alpine minirootfs ships busybox + many symlinks; broken extracts
+     * leave empty files instead of links.
+     */
+    private void postExtractFixups() throws IOException {
+        File root = new File(getRootfsPath());
+        File busybox = new File(root, "bin/busybox");
+        File sh = new File(root, "bin/sh");
+
+        if (busybox.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            busybox.setExecutable(true, false);
+        }
+
+        // If /bin/sh is missing or is a zero-byte stub, recreate as symlink to busybox
+        if (busybox.exists() && (!sh.exists() || (sh.isFile() && sh.length() == 0 && !Files.isSymbolicLink(sh.toPath())))) {
+            //noinspection ResultOfMethodCallIgnored
+            sh.delete();
+            try {
+                Files.createSymbolicLink(sh.toPath(), busybox.toPath().getFileName());
+                Log.i(TAG, "Created /bin/sh → busybox symlink");
+            } catch (Exception e) {
+                // Fallback: copy busybox as sh
+                try (InputStream in = new FileInputStream(busybox);
+                     OutputStream out = new FileOutputStream(sh)) {
+                    copy(in, out);
+                }
+                //noinspection ResultOfMethodCallIgnored
+                sh.setExecutable(true, false);
+                Log.w(TAG, "Symlink failed, copied busybox as sh: " + e.getMessage());
+            }
+        }
+
+        // Common busybox applets Alpine expects under /bin
+        if (busybox.exists()) {
+            String[] applets = {
+                    "sh", "ash", "ls", "cp", "mv", "rm", "mkdir", "cat", "echo",
+                    "ln", "chmod", "chown", "grep", "sed", "awk", "ps", "kill",
+                    "mount", "umount", "wget", "tar", "gzip", "gunzip"
+            };
+            File bin = new File(root, "bin");
+            for (String name : applets) {
+                File link = new File(bin, name);
+                if (link.exists() && !(link.isFile() && link.length() == 0 && !Files.isSymbolicLink(link.toPath()))) {
+                    continue;
+                }
+                //noinspection ResultOfMethodCallIgnored
+                link.delete();
+                try {
+                    Files.createSymbolicLink(link.toPath(), busybox.toPath().getFileName());
+                } catch (Exception ignored) {
+                    // non-fatal
+                }
+            }
+        }
+
+        // Make sure key dirs exist for apk
+        new File(root, "tmp").mkdirs();
+        new File(root, "var/cache/apk").mkdirs();
+        new File(root, "etc/apk").mkdirs();
+
+        Log.i(TAG, "postExtractFixups done; sh exists=" + sh.exists()
+                + " busybox=" + busybox.exists());
+    }
+
     private void downloadFile(String urlStr, File dest, ProgressListener listener) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setConnectTimeout(30_000);
@@ -308,7 +400,6 @@ public class RootfsManager {
         conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)");
         conn.connect();
         int code = conn.getResponseCode();
-        // follow one more hop if needed
         if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP
                 || code == 307 || code == 308) {
             String loc = conn.getHeaderField("Location");
@@ -353,14 +444,61 @@ public class RootfsManager {
     }
 
     /**
-     * Extract gzip-compressed tar (minirootfs format).
-     * Pure-Java ustar reader for common entries.
+     * Extract gzip tar. Prefer system `tar` (preserves symlinks).
+     * Fall back to pure-Java ustar with real NIO symlinks.
      */
     private void extractTarGz(String destDir, File tarGz) throws IOException {
         File dest = new File(destDir);
         if (!dest.exists() && !dest.mkdirs()) {
             throw new IOException("Cannot create " + destDir);
         }
+
+        // 1) Prefer system tar (same approach as mscode reference)
+        if (trySystemTar(tarGz, dest)) {
+            Log.i(TAG, "Extract via system tar → " + destDir);
+            return;
+        }
+
+        // 2) Pure-Java fallback with real symlink support
+        Log.w(TAG, "system tar unavailable — using Java extractor");
+        extractTarGzJava(destDir, tarGz);
+        Log.i(TAG, "Java extract complete → " + destDir);
+    }
+
+    private boolean trySystemTar(File tarGz, File dest) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "tar", "-xzf", tarGz.getAbsolutePath(), "-C", dest.getAbsolutePath());
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            StringBuilder out = new StringBuilder();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    out.append(line).append('\n');
+                }
+            }
+            int code = p.waitFor();
+            if (code == 0) {
+                // quick sanity: alpine-release or busybox should exist
+                if (new File(dest, "etc/alpine-release").exists()
+                        || new File(dest, "bin/busybox").exists()) {
+                    return true;
+                }
+                Log.w(TAG, "tar exited 0 but rootfs looks empty");
+            } else {
+                Log.w(TAG, "tar exit " + code + ": " + out);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "system tar failed: " + e.getMessage());
+        }
+        return false;
+    }
+
+    private void extractTarGzJava(String destDir, File tarGz) throws IOException {
+        File dest = new File(destDir);
+        List<String[]> pendingSymlinks = new ArrayList<>();
+
         try (InputStream fin = new FileInputStream(tarGz);
              InputStream gin = new GZIPInputStream(new BufferedInputStream(fin))) {
             byte[] header = new byte[512];
@@ -377,10 +515,21 @@ public class RootfsManager {
                     name = prefix + "/" + name;
                 }
                 if (name.startsWith("./")) name = name.substring(2);
+                if (name.isEmpty() || name.contains("..")) {
+                    long skip = size + (512 - (size % 512)) % 512;
+                    skipFully(gin, skip);
+                    continue;
+                }
 
                 File outFile = new File(dest, name);
                 if (type == '5' || name.endsWith("/")) {
                     outFile.mkdirs();
+                } else if (type == '2') {
+                    // symlink — defer so targets exist
+                    String target = tarString(header, 157, 100);
+                    pendingSymlinks.add(new String[]{name, target});
+                    long pad = (512 - (size % 512)) % 512;
+                    skipFully(gin, pad);
                 } else if (type == '0' || type == 0 || type == '7') {
                     File parent = outFile.getParentFile();
                     if (parent != null) parent.mkdirs();
@@ -394,14 +543,15 @@ public class RootfsManager {
                             remaining -= n;
                         }
                     }
-                    long pad = (512 - (size % 512)) % 512;
-                    skipFully(gin, pad);
-                } else if (type == '2') {
-                    File parent = outFile.getParentFile();
-                    if (parent != null) parent.mkdirs();
-                    try (FileOutputStream out = new FileOutputStream(outFile)) {
-                        // empty marker; proot resolves guest symlinks
+                    // Make bin/* and *.so executable
+                    if (name.startsWith("bin/") || name.startsWith("sbin/")
+                            || name.startsWith("usr/bin/") || name.startsWith("usr/sbin/")
+                            || name.endsWith(".so") || name.contains("/lib/")) {
+                        //noinspection ResultOfMethodCallIgnored
+                        outFile.setExecutable(true, false);
                     }
+                    //noinspection ResultOfMethodCallIgnored
+                    outFile.setReadable(true, false);
                     long pad = (512 - (size % 512)) % 512;
                     skipFully(gin, pad);
                 } else {
@@ -409,10 +559,44 @@ public class RootfsManager {
                     skipFully(gin, skip);
                 }
             }
-        } catch (java.util.zip.ZipException ze) {
-            throw new IOException("Archive is not valid gzip: " + ze.getMessage(), ze);
         }
-        Log.i(TAG, "Extract complete → " + destDir);
+
+        // Create real symlinks (NIO works in app-private storage on Android)
+        int links = 0;
+        for (String[] pair : pendingSymlinks) {
+            String linkName = pair[0];
+            String target = pair[1];
+            File linkFile = new File(dest, linkName);
+            File parent = linkFile.getParentFile();
+            if (parent != null) parent.mkdirs();
+            if (linkFile.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                linkFile.delete();
+            }
+            try {
+                Files.createSymbolicLink(linkFile.toPath(), java.nio.file.Paths.get(target));
+                links++;
+            } catch (Exception e) {
+                // Fallback: if target is a relative file that exists, copy it
+                File targetFile = new File(parent != null ? parent : dest, target);
+                if (!targetFile.isFile()) {
+                    targetFile = new File(dest, target);
+                }
+                if (targetFile.isFile()) {
+                    try (InputStream in = new FileInputStream(targetFile);
+                         OutputStream out = new FileOutputStream(linkFile)) {
+                        copy(in, out);
+                    }
+                    //noinspection ResultOfMethodCallIgnored
+                    linkFile.setExecutable(true, false);
+                    links++;
+                    Log.w(TAG, "Symlink fallback copy: " + linkName + " → " + target);
+                } else {
+                    Log.w(TAG, "Failed symlink " + linkName + " → " + target + ": " + e.getMessage());
+                }
+            }
+        }
+        Log.i(TAG, "Java extract: " + links + " symlinks created");
     }
 
     private static int readFully(InputStream in, byte[] buf) throws IOException {
