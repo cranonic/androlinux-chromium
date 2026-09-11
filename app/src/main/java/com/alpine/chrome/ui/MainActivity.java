@@ -161,36 +161,54 @@ public class MainActivity extends AppCompatActivity implements SessionEvents.Lis
         previewConnected = true;
         SessionLog.i("Main", "Connecting preview to ws://127.0.0.1:" + wsPort);
 
-        // noVNC from CDN + local WebSocket bridge (no Alpine wording in UI)
+        // Give x11vnc a moment after port open; chromium paints a bit later
+        handler.postDelayed(() -> loadNoVnc(wsPort), 1500);
+    }
+
+    private void loadNoVnc(int wsPort) {
         String html = "<!DOCTYPE html><html><head>"
+                + "<meta charset='utf-8'/>"
                 + "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'/>"
                 + "<style>"
                 + "html,body{margin:0;height:100%;background:#0f1115;overflow:hidden}"
                 + "#screen{position:fixed;inset:0;background:#000}"
-                + "#status{position:fixed;left:0;right:0;bottom:0;padding:10px;text-align:center;"
-                + "color:#9aa0a6;font:14px sans-serif;background:rgba(0,0,0,.55);pointer-events:none}"
+                + "#status{position:fixed;left:0;right:0;bottom:0;padding:12px;text-align:center;"
+                + "color:#9aa0a6;font:14px sans-serif;background:rgba(0,0,0,.65);z-index:5}"
                 + "</style>"
-                + "<script type='module'>"
-                + "import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/lib/rfb.js';"
-                + "const statusEl = document.getElementById('status');"
-                + "function setStatus(t){ statusEl.textContent = t; }"
-                + "try {"
-                + "  setStatus('Connecting…');"
-                + "  const rfb = new RFB(document.getElementById('screen'), 'ws://127.0.0.1:" + wsPort + "');"
-                + "  rfb.scaleViewport = true;"
-                + "  rfb.resizeSession = true;"
-                + "  rfb.background = '#000';"
-                + "  rfb.addEventListener('connect', () => { setStatus(''); statusEl.style.display='none'; });"
-                + "  rfb.addEventListener('disconnect', (e) => {"
-                + "    setStatus(e.detail.clean ? 'Disconnected' : 'Connection lost — retrying…');"
-                + "    statusEl.style.display='block';"
-                + "  });"
-                + "  rfb.addEventListener('credentialsrequired', () => { rfb.sendCredentials({ password: '' }); });"
-                + "} catch (err) {"
-                + "  setStatus('Viewer error: ' + err);"
-                + "}"
-                + "</script></head>"
-                + "<body><div id='screen'></div><div id='status'>Starting viewer…</div></body></html>";
+                + "</head><body>"
+                + "<div id='screen'></div>"
+                + "<div id='status'>Loading viewer…</div>"
+                + "<script type='module'>\n"
+                + "const statusEl = document.getElementById('status');\n"
+                + "const setStatus = (t) => { statusEl.textContent = t; statusEl.style.display = t ? 'block' : 'none'; };\n"
+                + "let rfb = null;\n"
+                + "async function connect() {\n"
+                + "  try {\n"
+                + "    setStatus('Loading noVNC…');\n"
+                + "    const RFB = (await import('https://cdn.jsdelivr.net/npm/@novnc/novnc@1.5.0/lib/rfb.js')).default;\n"
+                + "    setStatus('Connecting to display…');\n"
+                + "    if (rfb) { try { rfb.disconnect(); } catch(e){} }\n"
+                + "    rfb = new RFB(document.getElementById('screen'), 'ws://127.0.0.1:" + wsPort + "');\n"
+                + "    rfb.scaleViewport = true;\n"
+                + "    rfb.resizeSession = false;\n"
+                + "    rfb.clipViewport = false;\n"
+                + "    rfb.background = '#000';\n"
+                + "    rfb.showDotCursor = true;\n"
+                + "    rfb.addEventListener('connect', () => setStatus(''));\n"
+                + "    rfb.addEventListener('disconnect', (e) => {\n"
+                + "      setStatus(e.detail && e.detail.clean ? 'Disconnected' : 'Reconnecting…');\n"
+                + "      setTimeout(connect, 2000);\n"
+                + "    });\n"
+                + "    rfb.addEventListener('credentialsrequired', () => {\n"
+                + "      rfb.sendCredentials({ password: '' });\n"
+                + "    });\n"
+                + "  } catch (err) {\n"
+                + "    setStatus('Viewer error: ' + err);\n"
+                + "    setTimeout(connect, 3000);\n"
+                + "  }\n"
+                + "}\n"
+                + "connect();\n"
+                + "</script></body></html>";
 
         preview.setVisibility(View.VISIBLE);
         loadingOverlay.setVisibility(View.GONE);

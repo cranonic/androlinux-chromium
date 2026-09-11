@@ -12,8 +12,8 @@ android {
         targetSdk rootProject.ext.targetSdkVersion
         // Bump versionCode on every release so Android allows in-place update
         // without uninstall (preserves downloaded Chromium / rootfs data).
-        versionCode 3
-        versionName "1.0.3"
+        versionCode 4
+        versionName "1.0.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Keep binary assets uncompressed (rootfs archives, native libs)
