@@ -142,11 +142,11 @@ public class ChromiumInstaller {
                 + "fi\n"
                 + "echo \"[ac] Xvfb pid=$XVFB_PID\"\n"
                 + "\n"
-                // -nows: disable x11vnc built-in websockets (we proxy WS externally)
+                //: disable x11vnc built-in websockets (we proxy WS externally)
                 // -noshm: required under proot
                 + "echo '[ac] starting x11vnc :5901'\n"
                 + "x11vnc -display :1 -rfbport 5901 -localhost -forever -shared -nopw \\\n"
-                + "  -noshm -noxdamage -nows -xkb -ncache 0 -wait 1 -defer 1 \\\n"
+                + "  -noshm -noxdamage -xkb -ncache 0 -wait 1 -defer 1 \\\n"
                 + "  > /tmp/x11vnc.log 2>&1 &\n"
                 + "VNC_PID=$!\n"
                 + "sleep 2\n"
