@@ -109,7 +109,33 @@ public class ChromeSessionService extends Service {
                     SessionLog.e(TAG, "ensureLaunchHelper: " + e.getMessage());
                 }
                 ProotCommandBuilder proot = new ProotCommandBuilder(mgr);
-                String[] cmd = proot.buildShellCommand("/usr/local/bin/ac-start-chromium");
+
+                // Preflight: log what exists inside the guest
+                try {
+                    String[] checkCmd = proot.buildShellCommand(
+                            "echo PREFLIGHT; "
+                                    + "command -v Xvfb; command -v x11vnc; "
+                                    + "command -v chromium-browser || command -v chromium; "
+                                    + "ls -la /usr/local/bin/ac-start-browser 2>/dev/null; "
+                                    + "test -f /etc/alpine-release && cat /etc/alpine-release; "
+                                    + "true"
+                    );
+                    ProcessBuilder cpb = new ProcessBuilder(checkCmd);
+                    cpb.redirectErrorStream(true);
+                    cpb.environment().putAll(proot.buildEnv());
+                    Process cp = cpb.start();
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(cp.getInputStream()))) {
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            SessionLog.append("[preflight] " + line);
+                        }
+                    }
+                    cp.waitFor();
+                } catch (Exception e) {
+                    SessionLog.e(TAG, "preflight: " + e.getMessage());
+                }
+
+                String[] cmd = proot.buildShellCommand("/usr/local/bin/ac-start-browser");
                 SessionLog.i(TAG, "exec: " + String.join(" ", cmd));
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
@@ -128,6 +154,12 @@ public class ChromeSessionService extends Service {
                         }
                     } catch (Exception e) {
                         SessionLog.e(TAG, "reader: " + e.getMessage());
+                    }
+                    try {
+                        int code = chromiumProcess.waitFor();
+                        SessionLog.i(TAG, "guest process exited code=" + code);
+                    } catch (Exception e) {
+                        SessionLog.e(TAG, "waitFor: " + e.getMessage());
                     }
                 }, "chromium-log");
                 readerThread.setDaemon(true);
@@ -196,7 +228,10 @@ public class ChromeSessionService extends Service {
             RootfsManager mgr = new RootfsManager(this);
             ProotCommandBuilder proot = new ProotCommandBuilder(mgr);
             String[] cmd = proot.buildShellCommand(
-                    "pkill -f chromium 2>/dev/null; pkill -f x11vnc 2>/dev/null; pkill -f 'Xvfb :1' 2>/dev/null; true"
+                    "killall -q chromium-browser 2>/dev/null; "
+                            + "killall -q chromium 2>/dev/null; "
+                            + "killall -q x11vnc 2>/dev/null; "
+                            + "killall -q Xvfb 2>/dev/null; true"
             );
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.environment().putAll(proot.buildEnv());

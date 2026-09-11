@@ -105,41 +105,90 @@ public class ChromiumInstaller {
     private void writeLaunchHelper() throws IOException {
         File bin = new File(rootfs.getRootfsPath(), "usr/local/bin");
         bin.mkdirs();
-        File script = new File(bin, "ac-start-chromium");
+        // Name must NOT contain the substring "chromium" alone in a way pkill -f matches
+        // the running script. Keep script name but never pkill -f 'chromium' broadly.
+        File script = new File(bin, "ac-start-browser");
+        // Compatibility symlink/copy for older callers
+        File legacy = new File(bin, "ac-start-chromium");
         String body =
                 "#!/bin/sh\n"
+                        + "set -e\n"
                         + "export DISPLAY=:1\n"
                         + "export HOME=/root\n"
                         + "export XDG_RUNTIME_DIR=/tmp\n"
-                        + "pkill -f 'Xvfb :1' 2>/dev/null || true\n"
-                        + "pkill -f 'x11vnc' 2>/dev/null || true\n"
-                        + "pkill -f chromium 2>/dev/null || true\n"
+                        + "export TMPDIR=/tmp\n"
+                        + "mkdir -p /tmp /tmp/.X11-unix /root/.config\n"
+                        + "chmod 1777 /tmp 2>/dev/null || true\n"
+                        + "\n"
+                        // Kill only previous display helpers — NEVER match this script's argv
+                        + "echo '[ac] cleaning old display processes'\n"
+                        + "(killall Xvfb 2>/dev/null || true)\n"
+                        + "(killall x11vnc 2>/dev/null || true)\n"
+                        + "(killall chromium-browser 2>/dev/null || true)\n"
+                        + "(killall chromium 2>/dev/null || true)\n"
                         + "rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true\n"
-                        + "echo '[ac] starting Xvfb'\n"
-                        + "Xvfb :1 -screen 0 1280x720x24 -ac &\n"
+                        + "\n"
+                        + "echo '[ac] PATH='$PATH\n"
+                        + "echo '[ac] which Xvfb='$(command -v Xvfb || echo MISSING)\n"
+                        + "echo '[ac] which x11vnc='$(command -v x11vnc || echo MISSING)\n"
+                        + "echo '[ac] which chromium='$(command -v chromium-browser || command -v chromium || echo MISSING)\n"
+                        + "\n"
+                        + "if ! command -v Xvfb >/dev/null 2>&1; then\n"
+                        + "  echo '[ac] ERROR: Xvfb not installed'; exit 1\n"
+                        + "fi\n"
+                        + "if ! command -v x11vnc >/dev/null 2>&1; then\n"
+                        + "  echo '[ac] ERROR: x11vnc not installed'; exit 1\n"
+                        + "fi\n"
+                        + "\n"
+                        + "echo '[ac] starting Xvfb :1'\n"
+                        + "Xvfb :1 -screen 0 1280x720x24 -ac -nolisten tcp &\n"
+                        + "XVFB_PID=$!\n"
                         + "sleep 1\n"
-                        + "echo '[ac] starting x11vnc on 5901'\n"
-                        + "x11vnc -display :1 -rfbport 5901 -localhost -forever -shared -nopw -xkb -ncache 0 &\n"
+                        + "if ! kill -0 $XVFB_PID 2>/dev/null; then\n"
+                        + "  echo '[ac] ERROR: Xvfb failed to start'; exit 1\n"
+                        + "fi\n"
+                        + "echo '[ac] Xvfb pid='$XVFB_PID\n"
+                        + "\n"
+                        + "echo '[ac] starting x11vnc :5901'\n"
+                        + "x11vnc -display :1 -rfbport 5901 -localhost -forever -shared -nopw -xkb -ncache 0 -bg -o /tmp/x11vnc.log\n"
                         + "sleep 1\n"
-                        + "CHROME=$(command -v chromium-browser || command -v chromium)\n"
-                        + "if [ -z \"$CHROME\" ]; then echo '[ac] chromium not found'; exit 1; fi\n"
+                        + "if [ -f /tmp/x11vnc.log ]; then echo '[ac] x11vnc log:'; tail -n 20 /tmp/x11vnc.log; fi\n"
+                        + "\n"
+                        + "CHROME=$(command -v chromium-browser || command -v chromium || true)\n"
+                        + "if [ -z \"$CHROME\" ]; then\n"
+                        + "  echo '[ac] ERROR: chromium binary not found'; exit 1\n"
+                        + "fi\n"
                         + "echo \"[ac] launching $CHROME\"\n"
+                        // Do not use set -e after this; chromium may write to stderr
+                        + "set +e\n"
                         + "exec \"$CHROME\" \\\n"
                         + "  --no-sandbox \\\n"
                         + "  --disable-dev-shm-usage \\\n"
                         + "  --disable-gpu \\\n"
-                        + "  --use-gl=swiftshader \\\n"
+                        + "  --use-gl=angle \\\n"
+                        + "  --use-angle=swiftshader \\\n"
+                        + "  --in-process-gpu \\\n"
                         + "  --user-data-dir=/root/.config/chromium \\\n"
                         + "  --window-size=1280,720 \\\n"
                         + "  --start-maximized \\\n"
                         + "  --disable-features=TranslateUI \\\n"
                         + "  --no-first-run \\\n"
+                        + "  --disable-dbus \\\n"
                         + "  about:blank\n";
         try (FileOutputStream out = new FileOutputStream(script)) {
             out.write(body.getBytes("UTF-8"));
         }
         //noinspection ResultOfMethodCallIgnored
         script.setExecutable(true, false);
+        // Keep legacy name as a small wrapper so old paths still work
+        String wrapper =
+                "#!/bin/sh\n"
+                        + "exec /usr/local/bin/ac-start-browser \"$@\"\n";
+        try (FileOutputStream out = new FileOutputStream(legacy)) {
+            out.write(wrapper.getBytes("UTF-8"));
+        }
+        //noinspection ResultOfMethodCallIgnored
+        legacy.setExecutable(true, false);
     }
 
     private void runChecked(String shellCommand, int timeoutSec)
